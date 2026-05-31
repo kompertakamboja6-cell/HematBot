@@ -1,0 +1,19 @@
+{
+  "name": "hematbot",
+  "version": "1.0.0",
+  "description": "Telegram Budget Tracker Bot - Bantu menjaga limit pengeluaran harian Rp50.000",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "keywords": ["telegram", "bot", "budget", "tracker"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "dotenv": "^17.4.2",
+    "telegraf": "^4.16.3"
+  }
+}
