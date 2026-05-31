@@ -22,4 +22,47 @@ function getDayName(dateStr) {
   return days[d.getDay()];
 }
 
-module.exports = { formatRupiah, getDayName };
+const PERIOD_LABELS = {
+  daily: 'hari',
+  weekly: 'minggu',
+  monthly: 'bulan',
+  yearly: 'tahun',
+};
+
+/**
+ * Get Indonesian label for a budget period.
+ * @param {string} period - One of: daily, weekly, monthly, yearly
+ * @returns {string} Indonesian label
+ */
+function getPeriodLabel(period) {
+  return PERIOD_LABELS[period] || period;
+}
+
+/**
+ * Escape HTML special characters to prevent broken formatting.
+ * @param {string} text - Raw text to escape
+ * @returns {string} HTML-safe text
+ */
+function escapeHtml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Format morning reminder message with personalized greeting and motivational quote.
+ * @param {Object} params
+ * @param {string} params.name - User's name (may be empty/null)
+ * @param {string} params.quote - Motivational quote text
+ * @returns {string} HTML-formatted morning reminder message (max 300 visible chars)
+ */
+function formatMorningReminder({ name, quote }) {
+  const greeting = name
+    ? `🌅 <b>Selamat Pagi, ${escapeHtml(name)}!</b>`
+    : '🌅 <b>Selamat Pagi!</b>';
+
+  const quoteLine = `💬 "${quote}"`;
+  const cta = '📝 Yuk, mulai catat pengeluaranmu hari ini!';
+
+  return `${greeting}\n\n${quoteLine}\n\n${cta}`;
+}
+
+module.exports = { formatRupiah, getDayName, PERIOD_LABELS, getPeriodLabel, escapeHtml, formatMorningReminder };

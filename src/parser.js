@@ -1,22 +1,25 @@
 /**
- * Parse expense input from user.
+ * Parse expense input with budget-aware matching.
  * Accepts formats:
  *   "20 makan"           -> { amount: 20000, note: "makan", budget: null }
  *   "20k kopi"           -> { amount: 20000, note: "kopi", budget: null }
  *   "20000 parkir"       -> { amount: 20000, note: "parkir", budget: null }
  *   "15"                 -> { amount: 15000, note: "", budget: null }
- *   "20 makan jajan"     -> { amount: 20000, note: "makan", budget: "jajan" }
- *   "15 bensin transport" -> { amount: 15000, note: "bensin", budget: "transport" }
+ *   "20 makan jajan"     -> { amount: 20000, note: "makan", budget: "jajan" } (if "jajan" is in userBudgets)
+ *   "15 bensin transport" -> { amount: 15000, note: "bensin", budget: "transport" } (if "transport" is in userBudgets)
+ *
+ * @param {string} text - Raw user input
+ * @param {string[]} userBudgets - List of budget names owned by the user
+ * @returns {{ amount: number, note: string, budget: string|null } | null}
  */
-
-function parseExpense(text) {
+function parseExpense(text, userBudgets = []) {
   if (!text || typeof text !== 'string') {
     return null;
   }
 
   text = text.trim();
 
-  // Match: number (with optional 'k') followed by optional note and optional budget
+  // Match: number (with optional 'k') followed by optional text
   const match = text.match(/^(\d+)(k?)\s+(.+)$/i);
   const matchNoNote = text.match(/^(\d+)(k?)$/i);
 
@@ -37,18 +40,33 @@ function parseExpense(text) {
   hasK = match[2].toLowerCase() === 'k';
   const rest = match[3].trim();
 
-  // Split rest into words: last word might be a budget name
+  // Split rest into words
   const words = rest.split(/\s+/);
 
-  // If there are 2+ words, last word could be a budget
-  if (words.length >= 2) {
-    const note = words.slice(0, -1).join(' ');
-    const budget = words[words.length - 1];
-    return makeResult(amount, hasK, note, budget);
+  // Check if last word matches any entry in userBudgets (case-insensitive exact match)
+  const lastWord = words[words.length - 1];
+  const budgetMatch = userBudgets.find(
+    (b) => b.toLowerCase() === lastWord.toLowerCase()
+  );
+
+  let note, budget;
+
+  if (budgetMatch) {
+    // Last word matches a budget
+    budget = budgetMatch;
+    note = words.slice(0, -1).join(' ');
+  } else {
+    // No match: all words are the note
+    note = words.join(' ');
+    budget = null;
   }
 
-  // Single word after the number
-  return makeResult(amount, hasK, words[0], null);
+  // Truncate note to 100 characters
+  if (note.length > 100) {
+    note = note.substring(0, 100);
+  }
+
+  return makeResult(amount, hasK, note, budget);
 }
 
 function makeResult(amount, hasK, note, budget) {
@@ -58,7 +76,7 @@ function makeResult(amount, hasK, note, budget) {
     amount *= 1000;
   }
 
-  if (amount <= 0 || amount > 10_000_000) {
+  if (amount < 1000 || amount > 10_000_000) {
     return null;
   }
 

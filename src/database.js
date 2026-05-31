@@ -68,6 +68,28 @@ function initializeSchema() {
 
   // Index untuk budget_id harus dibuat SETELAH migrasi kolom
   db.exec('CREATE INDEX IF NOT EXISTS idx_expenses_budget ON expenses(budget_id, created_at)');
+
+  // Migrasi: tambah kolom onboarding dan notifikasi ke users table
+  try { db.exec('ALTER TABLE users ADD COLUMN onboarding_complete INTEGER DEFAULT 0'); } catch (e) {}
+  try { db.exec('ALTER TABLE users ADD COLUMN notification_enabled INTEGER DEFAULT 0'); } catch (e) {}
+  try { db.exec("ALTER TABLE users ADD COLUMN notification_time TEXT DEFAULT '21:00'"); } catch (e) {}
+
+  // Shortcuts table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shortcuts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      note TEXT DEFAULT '',
+      budget_name TEXT DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE(user_id, name)
+    );
+  `);
+
+  db.exec('CREATE INDEX IF NOT EXISTS idx_shortcuts_user ON shortcuts(user_id)');
 }
 
 function getOrCreateUser(telegramId, name = '') {
@@ -177,6 +199,94 @@ function getHistory(telegramId, days = 7) {
   return rows;
 }
 
+// --- Shortcut CRUD ---
+
+function createShortcut(telegramId, name, amount, note = '', budget = null) {
+  const db = getDatabase();
+  const user = getOrCreateUser(telegramId);
+  db.prepare(
+    `INSERT INTO shortcuts (user_id, name, amount, note, budget_name)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, name) DO UPDATE SET amount = excluded.amount, note = excluded.note, budget_name = excluded.budget_name`
+  ).run(user.id, name, amount, note, budget);
+  return db.prepare('SELECT * FROM shortcuts WHERE user_id = ? AND name = ?').get(user.id, name);
+}
+
+function getShortcuts(telegramId) {
+  const db = getDatabase();
+  const user = getOrCreateUser(telegramId);
+  return db.prepare('SELECT * FROM shortcuts WHERE user_id = ? ORDER BY name ASC').all(user.id);
+}
+
+function getShortcutByName(telegramId, name) {
+  const db = getDatabase();
+  const user = getOrCreateUser(telegramId);
+  return db.prepare('SELECT * FROM shortcuts WHERE user_id = ? AND name = ?').get(user.id, name) || null;
+}
+
+function deleteShortcut(telegramId, name) {
+  const db = getDatabase();
+  const user = getOrCreateUser(telegramId);
+  const result = db.prepare('DELETE FROM shortcuts WHERE user_id = ? AND name = ?').run(user.id, name);
+  return result.changes > 0;
+}
+
+function countShortcuts(telegramId) {
+  const db = getDatabase();
+  const user = getOrCreateUser(telegramId);
+  const row = db.prepare('SELECT COUNT(*) as count FROM shortcuts WHERE user_id = ?').get(user.id);
+  return row.count;
+}
+
+// --- Notification preferences ---
+
+function setNotificationEnabled(telegramId, enabled) {
+  const db = getDatabase();
+  const user = getOrCreateUser(telegramId);
+  db.prepare('UPDATE users SET notification_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, user.id);
+}
+
+function getNotificationSettings(telegramId) {
+  const db = getDatabase();
+  const user = getOrCreateUser(telegramId);
+  return {
+    enabled: user.notification_enabled === 1,
+    time: user.notification_time || '21:00',
+  };
+}
+
+function getUsersWithNotificationsEnabled() {
+  const db = getDatabase();
+  return db.prepare('SELECT * FROM users WHERE notification_enabled = 1').all();
+}
+
+// --- Undo support ---
+
+function deleteExpenseById(expenseId, userId) {
+  const db = getDatabase();
+  const result = db.prepare('DELETE FROM expenses WHERE id = ? AND user_id = ?').run(expenseId, userId);
+  return result.changes > 0;
+}
+
+function getExpenseById(expenseId) {
+  const db = getDatabase();
+  return db.prepare('SELECT * FROM expenses WHERE id = ?').get(expenseId) || null;
+}
+
+// --- Onboarding state ---
+
+function setOnboardingComplete(telegramId) {
+  const db = getDatabase();
+  const user = getOrCreateUser(telegramId);
+  db.prepare('UPDATE users SET onboarding_complete = 1 WHERE id = ?').run(user.id);
+}
+
+function isOnboardingComplete(telegramId) {
+  const db = getDatabase();
+  const user = getOrCreateUser(telegramId);
+  return user.onboarding_complete === 1;
+}
+
 module.exports = {
   getDatabase,
   getOrCreateUser,
@@ -191,4 +301,20 @@ module.exports = {
   getBudgetExpenses,
   getHistory,
   toSqliteDate,
+  // Shortcuts
+  createShortcut,
+  getShortcuts,
+  getShortcutByName,
+  deleteShortcut,
+  countShortcuts,
+  // Notifications
+  setNotificationEnabled,
+  getNotificationSettings,
+  getUsersWithNotificationsEnabled,
+  // Undo
+  deleteExpenseById,
+  getExpenseById,
+  // Onboarding
+  setOnboardingComplete,
+  isOnboardingComplete,
 };

@@ -4,7 +4,8 @@
  */
 
 const http = require('http');
-const { startBot } = require('./src/bot');
+const { startBot, bot } = require('./src/bot');
+const { startScheduler } = require('./src/scheduler');
 
 // Health check server untuk platform cloud (Koyeb, Railway, dll)
 const PORT = process.env.PORT || 8080;
@@ -16,3 +17,6 @@ http.createServer((req, res) => {
 });
 
 startBot();
+
+// Start daily summary scheduler (sends notifications at 21:00 WIB)
+startScheduler(bot);
