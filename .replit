@@ -1,0 +1,14 @@
+run = "npm start"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "npm start"]
+
+[[ports]]
+localPort = 8080
+externalPort = 443
+
+[packager]
+language = "nodejs"
