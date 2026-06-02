@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const { parseExpense } = require('./parser');
-const { formatRupiah, getDayName, getPeriodLabel } = require('./formatter');
+const { formatRupiah, getDayName, getPeriodLabel, escapeMarkdown } = require('./formatter');
 const {
   getOrCreateUser,
   setDailyLimit,
@@ -83,13 +83,14 @@ async function sendExpenseResponse(ctx, amount, note, category, budgetName = nul
   const limit = user.daily_limit;
   const sisa = limit - todayTotal;
 
+  const safeNote = note ? escapeMarkdown(note) : null;
   let response = `✅ Tercatat! *${formatRupiah(amount)}*`;
 
-  if (note) {
-    response += ` — ${note}`;
+  if (safeNote) {
+    response += ` — ${safeNote}`;
   }
   if (budget) {
-    response += ` 📁 [${budget.name}]`;
+    response += ` 📁 [${escapeMarkdown(budget.name)}]`;
   }
 
   response += `\n\n📊 *Ringkasan hari ini:*`;
@@ -100,16 +101,17 @@ async function sendExpenseResponse(ctx, amount, note, category, budgetName = nul
 
   // Cek overbudget untuk budget spesifik kalo ada
   if (budget) {
+    const safeBudgetName = escapeMarkdown(budget.name);
     const range = getPeriodRange(budget.period);
     const budgetExpenses = getBudgetExpenses(telegramId, budget.id, range.start, range.end);
     const budgetTotal = budgetExpenses.reduce((s, e) => s + e.amount, 0);
     const budgetSisa = budget.limit_amount - budgetTotal;
 
-    response += `\n\n📁 *Budget ${budget.name}:*`;
+    response += `\n\n📁 *Budget ${safeBudgetName}:*`;
     response += `\n• Terpakai: ${formatRupiah(budgetTotal)} / ${formatRupiah(budget.limit_amount)}`;
 
     if (budgetTotal > budget.limit_amount) {
-      response += `\n⚠️ *Budget ${budget.name} sudah melewati limit.* Gak apa-apa, besok bisa lebih dijaga ya! 💪`;
+      response += `\n⚠️ *Budget ${safeBudgetName} sudah melewati limit.* Gak apa-apa, besok bisa lebih dijaga ya! 💪`;
     } else {
       response += `\n• Sisa: ${formatRupiah(budgetSisa)}`;
     }
@@ -155,11 +157,12 @@ bot.start(async (ctx) => {
     // Existing user: show welcome + active settings summary
     const budgets = getBudgets(telegramId);
     const budgetList = budgets.length > 0
-      ? budgets.map(b => `• ${b.name}: ${formatRupiah(b.limit_amount)}`).join('\n')
+      ? budgets.map(b => `• ${escapeMarkdown(b.name)}: ${formatRupiah(b.limit_amount)}`).join('\n')
       : 'Belum ada budget.';
 
+    const safeName = escapeMarkdown(name);
     const msg = [
-      `Hai ${name}! Senang ketemu lagi 👋`,
+      `Hai ${safeName}! Senang ketemu lagi 👋`,
       '',
       'Ini ringkasan pengaturan kamu saat ini:',
       '',
@@ -435,7 +438,7 @@ async function sendBudgetResponse(ctx, telegramId) {
     const periodLabel = getPeriodLabel(b.period);
     const overLimit = total > b.limit_amount ? ' ⚠️ Over!' : '';
 
-    response += `💰 *${b.name}*: ${formatRupiah(total)} / ${formatRupiah(b.limit_amount)}/${periodLabel}${overLimit}\n`;
+    response += `💰 *${escapeMarkdown(b.name)}*: ${formatRupiah(total)} / ${formatRupiah(b.limit_amount)}/${periodLabel}${overLimit}\n`;
     if (total <= b.limit_amount) {
       response += `   Sisa: ${formatRupiah(sisa)}\n`;
     }
@@ -470,7 +473,7 @@ bot.command('hapus', async (ctx) => {
     const budgets = getBudgets(telegramId);
     let response = `🔍 Budget "${text}" tidak ditemukan.`;
     if (budgets.length > 0) {
-      const names = budgets.map((b) => `• ${b.name}`).join('\n');
+      const names = budgets.map((b) => `• ${escapeMarkdown(b.name)}`).join('\n');
       response += `\n\nBudget yang tersedia:\n${names}\n\nContoh: \`/hapus ${budgets[0].name}\``;
     } else {
       response += '\n\nKamu belum punya budget. Buat dulu dengan `/buat <nama> <nominal>`';
@@ -481,7 +484,7 @@ bot.command('hapus', async (ctx) => {
 
   // Budget exists: show confirmation with details
   const periodLabel = getPeriodLabel(budget.period);
-  const confirmMsg = `Hapus budget *${budget.name}*?\n\nLimit: ${formatRupiah(budget.limit_amount)}/${periodLabel}\nPeriode: ${periodLabel}`;
+  const confirmMsg = `Hapus budget *${escapeMarkdown(budget.name)}*?\n\nLimit: ${formatRupiah(budget.limit_amount)}/${periodLabel}\nPeriode: ${periodLabel}`;
 
   const keyboard = buildKeyboard('confirm_delete', { budgetName: budget.name });
   const sentMsg = await ctx.reply(confirmMsg, { parse_mode: 'Markdown', ...keyboard });
@@ -585,8 +588,8 @@ async function sendTodayResponse(ctx, telegramId) {
 
   let response = `📋 *Pengeluaran Hari Ini*\n\n`;
   expenses.forEach((e) => {
-    const label = e.note || e.category || 'tanpa keterangan';
-    const budgetTag = e.budget_name ? ` [${e.budget_name}]` : '';
+    const label = escapeMarkdown(e.note || e.category || 'tanpa keterangan');
+    const budgetTag = e.budget_name ? ` [${escapeMarkdown(e.budget_name)}]` : '';
     response += `• ${label}: ${formatRupiah(e.amount)}${budgetTag}\n`;
   });
 
@@ -973,9 +976,9 @@ bot.command('shortcuts', async (ctx) => {
 
   let message = '📋 *Daftar Shortcut:*\n\n';
   shortcuts.forEach((s, i) => {
-    message += `${i + 1}. *${s.name}* — ${formatRupiah(s.amount)}`;
-    if (s.note) message += ` — ${s.note}`;
-    if (s.budget_name) message += ` [${s.budget_name}]`;
+    message += `${i + 1}. *${escapeMarkdown(s.name)}* — ${formatRupiah(s.amount)}`;
+    if (s.note) message += ` — ${escapeMarkdown(s.note)}`;
+    if (s.budget_name) message += ` [${escapeMarkdown(s.budget_name)}]`;
     message += '\n';
   });
 

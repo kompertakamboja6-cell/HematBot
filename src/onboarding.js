@@ -2,7 +2,7 @@
 
 const { setDailyLimit, setOnboardingComplete, isOnboardingComplete, getBudgets } = require('./database');
 const { buildKeyboard } = require('./keyboard');
-const { formatRupiah } = require('./formatter');
+const { formatRupiah, escapeMarkdown } = require('./formatter');
 
 const MIN_LIMIT = 1000;
 const MAX_LIMIT = 10000000;
@@ -23,7 +23,8 @@ function needsOnboarding(user) {
  * @returns {{ text: string }}
  */
 function getWelcomeStep(telegramId, firstName) {
-  const greeting = firstName ? `Halo ${firstName}! 👋` : 'Halo! 👋';
+  const safeName = firstName ? escapeMarkdown(firstName) : '';
+  const greeting = safeName ? `Halo ${safeName}! 👋` : 'Halo! 👋';
   const welcome = `${greeting}\nSelamat datang di HematBot 🎉\n\nAku asisten keuangan pribadimu — bantu catat pengeluaran harian biar kamu lebih sadar ke mana uangmu pergi. Simpel, cepat, dan tanpa ribet! 💰`;
 
   const instruction = [

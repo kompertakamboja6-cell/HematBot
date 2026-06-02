@@ -48,6 +48,16 @@ function escapeHtml(text) {
 }
 
 /**
+ * Escape Telegram Markdown special characters in user-provided text.
+ * Prevents parse errors when names contain _ * or ` .
+ * @param {string} text - Raw text
+ * @returns {string} Markdown-safe text
+ */
+function escapeMarkdown(text) {
+  return text.replace(/[_*[\]`]/g, '\\$&');
+}
+
+/**
  * Format morning reminder message with personalized greeting and motivational quote.
  * @param {Object} params
  * @param {string} params.name - User's name (may be empty/null)
@@ -65,4 +75,4 @@ function formatMorningReminder({ name, quote }) {
   return `${greeting}\n\n${quoteLine}\n\n${cta}`;
 }
 
-module.exports = { formatRupiah, getDayName, PERIOD_LABELS, getPeriodLabel, escapeHtml, formatMorningReminder };
+module.exports = { formatRupiah, getDayName, PERIOD_LABELS, getPeriodLabel, escapeHtml, escapeMarkdown, formatMorningReminder };
